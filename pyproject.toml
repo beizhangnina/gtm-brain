@@ -1,0 +1,30 @@
+[project]
+name = "gtm-brain"
+version = "0.1.0"
+description = "把 Obsidian GTM vault 对账进一个带图的托管 gbrain MCP"
+requires-python = ">=3.11"
+dependencies = [
+    "typer>=0.12",
+    "rich>=13.7",
+    "pillow>=10.3",
+    "python-frontmatter>=1.1",
+    "httpx>=0.27",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+gtm-brain = "gtm_brain.cli:app"
+
+[dependency-groups]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[build-system]
+requires = ["uv_build>=0.8,<0.10"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "gtm_brain"
+module-root = ""
+
+[tool.ruff]
+line-length = 100

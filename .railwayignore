@@ -1,0 +1,23 @@
+# 构建上下文只需要 Dockerfile + deploy/bin/。其余一律排除。
+
+# ⚠️ 密钥绝不进构建上下文
+.env
+.env.local
+*.key
+
+# 495MB 的衍生品缓存，传上去纯浪费
+.cache/
+state.db
+state.db-*
+
+.venv/
+__pycache__/
+*.pyc
+.git/
+supabase/
+gtm_brain/
+tasks/
+docs/
+*.md
+uv.lock
+pyproject.toml

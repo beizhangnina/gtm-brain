@@ -1,0 +1,26 @@
+# Service 级 env（GTM_BRAIN_DATABASE_URL / VOYAGE_API_KEY）走 Railway dashboard，不入 git。
+#
+# ⚠️ Dockerfile 必须在仓库根。实测：放在 deploy/ 并用 dockerfilePath 指过去，
+# Railway 仍然会忽略它、走 Railpack 自动探测，然后 prepare 阶段失败。
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Railway 不 honor Dockerfile 的 ENTRYPOINT，必须显式给 startCommand。
+# 不给的话 entrypoint.sh 根本不跑，deploy 会卡在 healthcheck failure
+# 而 runtime logs 完全是空的 —— 极难排查。这条是 dormy-brain 实验出来的。
+startCommand = "/entrypoint.sh"
+
+# /health 是 gbrain 内置的免认证 endpoint
+healthcheckPath = "/health"
+# 120s —— 第一次启动要连 Postgres + 跑 schema probe
+healthcheckTimeout = 120
+
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+# 单 replica：brain 数据在 Postgres，多 replica 共享同库没问题，
+# 但 admin token 是 per-instance 生成的，暂时保持单副本简化运维。
+numReplicas = 1
