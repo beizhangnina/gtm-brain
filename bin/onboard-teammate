@@ -93,4 +93,4 @@ REVOKE="railway ssh -s gtm-brain bun /app/src/cli.ts auth revoke-client $ID"
 printf '%s\t%s\t%s\t%s\n' "$(date +%F)" "$NAME" "$ID" "$REVOKE" >> "$OUT_DIR/clients.log"
 echo "  发给对方：AirDrop 最好；远程就私聊发文件，对方装好后把消息删掉。别发群聊、邮件"
 echo "  对方在终端跑：bash $NAME-install.sh"
-echo "  撤销命令已记进 onboarding/clients.log
+echo "  撤销命令已记进 onboarding/clients.log"
