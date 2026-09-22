@@ -72,6 +72,13 @@ sqlite3 state.db "select count(*), sum(ingested_at is not null), sum(error is no
 **并发**：服务端对同一个 source **严格串行**写入，客户端 `--workers` 开多了没有用，只会多抢锁。
 保持 4（G-010 的旧测量数据在跨区时代测的，已作废；换区后没重新测，因为周更的量太小，测不出区别）。
 
+## 轮换数据库密码
+
+1. Supabase dashboard → Reset database password（`postgres` 角色不是超级用户，SQL 改不了）。
+2. 自己的终端里跑 `bin/rotate-db-password`，粘贴新密码。脚本会先验证新密码能连上库，
+   再更新 `.env` 和 Railway 变量（`--stdin`，密码不进进程参数），最后等服务重新上线。
+   连不上就什么都不改。
+
 ## 已知的工具坑
 
 - **`railway delete` 用项目名和完整 UUID 都报 "not found"**，但 `railway list`
