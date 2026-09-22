@@ -6,7 +6,7 @@
 #
 # 把安装脚本通过 1Password 等私密渠道发给对方，对方跑一次：
 #   bash <名字>-install.sh
-# 就装进了他的 Claude Code。撤销：bin/onboard-teammate 打印的 revoke 命令。
+# 就装进了他的 Claude Code 和/或 Codex。撤销：bin/onboard-teammate 打印的 revoke 命令。
 #
 # 凭证全程不打印到终端 —— 这个终端的输出可能会进对话或日志。
 
@@ -30,13 +30,15 @@ unset RAW
 [[ "$ID" == gbrain_cl_* && "$SECRET" == gbrain_cs_* ]] || {
   echo "✗ 没从输出里解析到凭证（gbrain 输出格式变了？）"; exit 1; }
 
-# 生成安装脚本：凭证和 headers.py 都内嵌进去，对方不需要 clone 仓库
+# 生成安装脚本：凭证和 client/ 下的文件都内嵌进去，对方不需要 clone 仓库
 umask 077
 {
   cat <<EOF
 #!/bin/bash
 # GTM Brain 一键安装（$NAME 专用，含个人凭证，别转发）
+# 检测到 Claude Code 就装进 Claude Code，检测到 Codex 就装进 Codex，都有就都装。
 set -euo pipefail
+URL="$URL"
 D="\$HOME/.config/gtm-brain"
 mkdir -p "\$D" && chmod 700 "\$D"
 cat > "\$D/.env" <<'ENV'
@@ -45,24 +47,41 @@ GTM_BRAIN_CLIENT_ID=$ID
 GTM_BRAIN_CLIENT_SECRET=$SECRET
 ENV
 chmod 600 "\$D/.env"
-cat > "\$D/headers.py" <<'PY'
 EOF
-  cat "$REPO/client/headers.py"
+  for f in headers.py stdio_bridge.py install_rule.py install_codex.py claude-md-rule.md; do
+    printf 'cat > "$D/%s" <<'"'"'GTM_EOF'"'"'\n' "$f"
+    cat "$REPO/client/$f"
+    printf 'GTM_EOF\n'
+  done
   cat <<'EOF'
-PY
-chmod 700 "$D/headers.py"
+chmod 700 "$D"/*.py
 rm -f "$D/token.json"
 
 python3 "$D/headers.py" >/dev/null 2>&1 || { echo "✗ 凭证换不到 token，把这句话发给阿蓓"; exit 1; }
 echo "✓ 凭证有效"
 
-command -v claude >/dev/null || { echo "✗ 没找到 claude 命令，先装 Claude Code"; exit 1; }
-claude mcp remove gtm-brain -s user >/dev/null 2>&1 || true
-claude mcp add-json gtm-brain -s user \
-  "{\"type\":\"http\",\"url\":\"GTM_URL/mcp\",\"headersHelper\":\"$D/headers.py\"}"
-echo "✓ 已装进 Claude Code。重开一个 Claude Code 会话，问它：用 gtm-brain 搜一下 B2B SaaS 的定位案例"
+installed=""
+if command -v claude >/dev/null; then
+  claude mcp remove gtm-brain -s user >/dev/null 2>&1 || true
+  claude mcp add-json gtm-brain -s user \
+    "{\"type\":\"http\",\"url\":\"$URL/mcp\",\"headersHelper\":\"$D/headers.py\"}" >/dev/null
+  echo "✓ 已装进 Claude Code"
+  # 全局规则：问 GTM 问题时自动先查 gtm-brain，不用每次点名
+  python3 "$D/install_rule.py" "$D/claude-md-rule.md" "$HOME/.claude/CLAUDE.md"
+  installed="Claude Code"
+fi
+if [ -d "$HOME/.codex" ]; then
+  # Codex 没有 headersHelper，走本地 stdio 桥接自动换 token
+  python3 "$D/install_codex.py"
+  python3 "$D/install_rule.py" "$D/claude-md-rule.md" "$HOME/.codex/AGENTS.md"
+  installed="${installed:+${installed} 和 }Codex"
+fi
+[ -n "$installed" ] || { echo "✗ 没找到 Claude Code 也没找到 Codex，先装其中一个再重跑"; exit 1; }
+echo ""
+echo "✓ 完成，已装进 ${installed}。重开一个会话（Codex 要重启 App），直接问 GTM 问题就行，"
+echo "  比如：B2B SaaS 首页定位有哪些好的改版案例？"
 EOF
-} | sed "s#GTM_URL#$URL#" > "$OUT"
+} > "$OUT"
 chmod 600 "$OUT"
 unset SECRET
 

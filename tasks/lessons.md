@@ -48,3 +48,8 @@
   **收尾时要按真实的周期性场景端到端跑一次**，不能只验证一次性的全量回填。
 - **`set -u` 的 bash 里，变量后紧跟全角标点要写 `${var}`。** `$fail）` 会被当成变量名的一部分。
 - **退出码要真的表达成败。** weekly-sync 的 `fail` 标记原来形同虚设：slim/upload/ingest 有失败也返回 0。
+- **同一个 bash 坑犯了第二次**（`$installed 和` → unbound variable）。光在 lessons 里记一笔不够，
+  要变成检查动作：**写完带中文的 bash 脚本，提交前跑一次**
+  `LC_ALL=C grep -n '\$[A-Za-z_][A-Za-z0-9_]*[^ -~]' bin/*`，有输出就改成 `${var}`。
+- **测试环境本身也会出 bug**：python3 桩指向 pyenv shim → shim 又找回桩，死循环。
+  桩要指向真实可执行文件（`python3 -c 'import sys;print(sys.executable)'`）；macOS 没有 `timeout` 命令。

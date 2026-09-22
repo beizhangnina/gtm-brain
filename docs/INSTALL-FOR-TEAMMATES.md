@@ -1,7 +1,7 @@
 # 接入 GTM Brain
 
 一个装着 1,200+ 篇 GTM newsletter 和 7,000+ 张配图的知识库，
-通过 MCP 接进你的 Claude Code，用文字就能搜。
+通过 MCP 接进你的 **Claude Code 和 / 或 Codex**，用文字就能搜。
 
 内容来源：Lenny's Newsletter、Growth Unhinged、Marketing Ideas、
 Fletch PMM（Before/After 定位对比）、MRR Unlocked，外加一批 GTM playbook。
@@ -37,22 +37,31 @@ bin/onboard-teammate <你的名字>
 bash <你的名字>-install.sh
 ```
 
-它会做三件事：
-1. 把凭证存到 `~/.config/gtm-brain/.env`（权限 600，只有你能读）
-2. 放一个小脚本 `~/.config/gtm-brain/headers.py`，Claude Code 每次连接时用它自动换新 token
-   —— 所以**配一次就永远不用管**，不会一小时后过期
-3. 用 `claude mcp add-json` 把 `gtm-brain` 装进 Claude Code（user 级，所有项目都能用）
+它会自动检测你装了什么，**Claude Code、Codex 都有就两个都装**：
 
-需要：Claude Code 已安装，机器上有 `python3`（macOS 自带）。不需要 clone 任何仓库。
+| | Claude Code | Codex（ChatGPT App） |
+|---|---|---|
+| 怎么连 | `headersHelper`：每次连接时自动换新 token | 本地 stdio 桥接 `stdio_bridge.py`：每次请求自动换新 token |
+| 写到哪 | `claude mcp add-json`（user 级，所有项目可用） | `~/.codex/config.toml` 里的 `[mcp_servers.gtm-brain]` |
+| 全局规则 | `~/.claude/CLAUDE.md` | `~/.codex/AGENTS.md` |
+
+两边连的是**同一个 brain、同一份凭证**（存在 `~/.config/gtm-brain/.env`，权限 600）。
+**配一次就永远不用管**，不会一小时后过期。
+
+「全局规则」是一小段指令：问 GTM 相关问题时，Claude / Codex 会自动先查 gtm-brain，
+**不用每次都说「用 gtm-brain」**。它写在带标记的一段里，重装只替换这一段，不碰你原有的内容。
+配置文件里也一样，只动 `gtm-brain` 那一段。
+
+需要：装了 Claude Code 或 Codex 其中之一，机器上有 `python3`（macOS 自带）。不需要 clone 任何仓库。
 
 > 为什么不是普通的 `claude mcp add ... http`：gbrain 的浏览器授权会跳到管理员同意页，
 > 同事进不去。所以改用 client_credentials + headersHelper，完全不走浏览器。
 
 ## 第 3 步：验证装好了
 
-**重开一个** Claude Code 会话（MCP 在会话启动时加载），问一句：
+**重开一个** Claude Code 会话，或者**重启 ChatGPT App**（MCP 在启动时加载），直接问：
 
-> 用 gtm-brain 搜一下 B2B SaaS 的定位框架，给我三个案例
+> B2B SaaS 首页定位有哪些好的改版案例？给我三个，说说改前改后的区别
 
 装好的话，它会返回带引用的正文。正文里的图片都是可以直接打开的链接。
 
@@ -76,7 +85,7 @@ bash <你的名字>-install.sh
 | 现象 | 原因 |
 |---|---|
 | 安装脚本报「凭证换不到 token」 | 凭证被撤销或网络不通。找阿蓓重新生成 |
-| `claude mcp list` 里 gtm-brain 连不上 | 在终端跑 `python3 ~/.config/gtm-brain/headers.py`，报错信息发给阿蓓 |
+| Claude Code 里 `/mcp` 显示 gtm-brain 连不上，或 Codex 里没有 gtm-brain 工具 | 在终端跑 `python3 ~/.config/gtm-brain/headers.py`，报错信息发给阿蓓 |
 | `insufficient_scope` | 你在调一个需要 `admin` 或 `write` 的工具。同事只有 `read`，正常 |
 | 图片打不开 | 图片是公开 URL，不需要凭证。打不开说明是网络问题，不是权限问题 |
 
