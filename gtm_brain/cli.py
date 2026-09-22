@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -216,6 +217,8 @@ def upload(
 
     st.close()
     console.print(f"\n上传成功 [green]{ok:,}[/green]   失败 [{'red' if failed else 'dim'}]{failed:,}[/]")
+    if failed:
+        raise typer.Exit(1)
 
 
 def _find_cached(sha: str):
@@ -245,7 +248,7 @@ def ingest(
     limit: int = typer.Option(0, help="只处理前 N 篇，0 = 全部"),
     dry_run: bool = typer.Option(False, "--dry-run", help="只打印将写入什么，不碰 brain"),
     force: bool = typer.Option(False, "--force", help="忽略缓存，全部重推"),
-    workers: int = typer.Option(4, help="并发写入数。单篇固定开销约 40s 必须并行，\n但 8 路会触发数据库争用，4 是实测的甜点"),
+    workers: int = typer.Option(4, help="并发写入数。服务端对同一 source 串行写入，\n开多了只会多抢锁（G-013）"),
 ) -> None:
     """把笔记推进 gbrain：相对路径 → 绝对 URL，打 tag，put_page。"""
     import httpx
@@ -261,16 +264,25 @@ def ingest(
         st.close()
         return
 
+    # 要不要推，看的是「推上去的内容」有没有变，不只是笔记源文件（G-014）：
+    # 笔记没改、但它引用的图后来才上传，渲染出来的正文也变了，同样要重推。
+    # 全量渲染一遍只要一两秒，比漏推便宜得多。
     todo = []
+    total = 0
     for a in vault.iter_notes(v):
-        sha = vault.sha256_file(a.abs_path)
+        total += 1
+        data = a.abs_path.read_bytes()
+        n = noteslib.parse(a.rel_path, data.decode("utf-8", errors="replace"))
+        r = noteslib.rewrite_images(n.body, a.rel_path, url_map)
+        md = noteslib.to_markdown(n, r.body)
+        pushed = hashlib.sha256(md.encode("utf-8")).hexdigest()
         row = st.conn.execute(
-            "SELECT ingested_sha256 FROM notes WHERE rel_path = ?", (a.rel_path,)
+            "SELECT pushed_sha256 FROM notes WHERE rel_path = ?", (a.rel_path,)
         ).fetchone()
-        if force or row is None or row["ingested_sha256"] != sha:
-            todo.append((a, sha))
+        if force or row is None or row["pushed_sha256"] != pushed:
+            todo.append((a, hashlib.sha256(data).hexdigest(), n, r, md, pushed))
 
-    console.print(f"笔记 [bold]{len(list(vault.iter_notes(v))):,}[/bold] 篇   "
+    console.print(f"笔记 [bold]{total:,}[/bold] 篇   "
                   f"待处理 [bold]{len(todo):,}[/bold]   图片 URL [dim]{len(url_map):,}[/dim]")
     if limit:
         todo = todo[:limit]
@@ -280,9 +292,7 @@ def ingest(
         return
 
     if dry_run:
-        for a, _ in todo[:5]:
-            n = noteslib.parse(a.rel_path, a.abs_path.read_text(encoding="utf-8", errors="replace"))
-            r = noteslib.rewrite_images(n.body, a.rel_path, url_map)
+        for _, _, n, r, _, _ in todo[:5]:
             console.print(f"\n[bold]{n.slug}[/bold]")
             console.print(f"  title  {n.title[:70]}")
             console.print(f"  date   {n.date}   tags {n.tags}")
@@ -297,18 +307,33 @@ def ingest(
     lock = threading.Lock()
 
     def _one(item):
-        a, sha = item
+        _, _, n, _, md, _ = item
         # 每个线程一个 client：httpx.Client 不保证跨线程共享安全
         with httpx.Client(timeout=300) as client:
-            raw = a.abs_path.read_text(encoding="utf-8", errors="replace")
-            n = noteslib.parse(a.rel_path, raw)
-            r = noteslib.rewrite_images(n.body, a.rel_path, url_map)
-            brainlib.put_page_sync(bc, client, n.slug, noteslib.to_markdown(n, r.body))
-            return a, sha, n.slug, len(r.unresolved)
+            brainlib.put_page_sync(bc, client, n.slug, md)
+
+    def _record_ok(item, pushed: str | None):
+        """pushed=None：没能确认是这一版落的库，留空让下次重推（幂等，只是多一次写）。"""
+        a, src, n, _, _, _ = item
+        with st.tx() as c:
+            c.execute(
+                """INSERT INTO notes (rel_path, src_sha256, seen_at, slug,
+                                      ingested_sha256, pushed_sha256, ingested_at, error)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
+                   ON CONFLICT(rel_path) DO UPDATE SET
+                     src_sha256=excluded.src_sha256, slug=excluded.slug,
+                     ingested_sha256=excluded.ingested_sha256,
+                     pushed_sha256=excluded.pushed_sha256,
+                     ingested_at=excluded.ingested_at, error=NULL""",
+                (a.rel_path, src, statelib.now(), n.slug, src, pushed, statelib.now()),
+            )
 
     with httpx.Client(timeout=120) as boot:
-        bc.token(boot)        # 预取 token，避免 N 个线程同时去换
-        bc.initialize(boot)
+        # 预取 token，避免 N 个线程同时去换。
+        # 必须带重试 —— 这里一次 ReadTimeout 曾让跑了 11 小时的任务
+        # 在重启的启动阶段直接崩掉（G-012）。
+        brainlib.with_network_retry(lambda: bc.token(boot), what="取 token")
+        brainlib.with_network_retry(lambda: bc.initialize(boot), what="MCP initialize")
 
     with Progress(
         SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
@@ -319,67 +344,48 @@ def ingest(
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {pool.submit(_one, it): it for it in todo}
             for fut in as_completed(futures):
-                a, sha = futures[fut]
+                item = futures[fut]
+                a, src, n, r, _, pushed = item
                 try:
-                    _, _, slug, dead = fut.result()
+                    fut.result()
                     with lock:
                         ok += 1
-                        dead_total += dead
-                        with st.tx() as c:
-                            c.execute(
-                                """INSERT INTO notes (rel_path, src_sha256, seen_at, slug,
-                                                      ingested_sha256, ingested_at, error)
-                                   VALUES (?, ?, ?, ?, ?, ?, NULL)
-                                   ON CONFLICT(rel_path) DO UPDATE SET
-                                     src_sha256=excluded.src_sha256, slug=excluded.slug,
-                                     ingested_sha256=excluded.ingested_sha256,
-                                     ingested_at=excluded.ingested_at, error=NULL""",
-                                (a.rel_path, sha, statelib.now(), slug, sha, statelib.now()),
-                            )
+                        dead_total += len(r.unresolved)
+                        _record_ok(item, pushed)
                 except Exception as exc:
                     # 写入是 durable 的：超时不代表没落库。
                     # 标失败前先回读，避免把成功算成失败。
+                    # 但回读只能证明页面存在，不能证明是这一版 —— 所以不记 pushed_sha256。
                     landed = False
                     try:
-                        n2 = noteslib.parse(
-                            a.rel_path,
-                            a.abs_path.read_text(encoding="utf-8", errors="replace"))
                         with httpx.Client(timeout=60) as vc:
-                            chk = bc.call(vc, "get_page", {"slug": n2.slug})
+                            chk = brainlib.with_network_retry(
+                                lambda: bc.call(vc, "get_page", {"slug": n.slug}),
+                                attempts=3, what="回读确认")
                             landed = brainlib.mcp_error(chk) is None
                     except Exception:
                         pass
-                    if landed:
-                        with lock:
+                    with lock:
+                        if landed:
                             ok += 1
+                            _record_ok(item, None)
+                        else:
+                            failed += 1
                             with st.tx() as c:
                                 c.execute(
-                                    """INSERT INTO notes (rel_path, src_sha256, seen_at, slug,
-                                                          ingested_sha256, ingested_at, error)
-                                       VALUES (?, ?, ?, ?, ?, ?, NULL)
-                                       ON CONFLICT(rel_path) DO UPDATE SET
-                                         ingested_sha256=excluded.ingested_sha256,
-                                         ingested_at=excluded.ingested_at, error=NULL""",
-                                    (a.rel_path, sha, statelib.now(), n2.slug,
-                                     sha, statelib.now()),
+                                    """INSERT INTO notes (rel_path, src_sha256, seen_at, error)
+                                       VALUES (?, ?, ?, ?)
+                                       ON CONFLICT(rel_path) DO UPDATE SET error=excluded.error""",
+                                    (a.rel_path, src, statelib.now(), repr(exc)[:400]),
                                 )
-                        prog.advance(task)
-                        continue
-                    with lock:
-                        failed += 1
-                        with st.tx() as c:
-                            c.execute(
-                                """INSERT INTO notes (rel_path, src_sha256, seen_at, error)
-                                   VALUES (?, ?, ?, ?)
-                                   ON CONFLICT(rel_path) DO UPDATE SET error=excluded.error""",
-                                (a.rel_path, sha, statelib.now(), repr(exc)[:400]),
-                            )
                 prog.advance(task)
 
     st.close()
     console.print(f"\ningest 成功 [green]{ok:,}[/green]   失败 "
                   f"[{'red' if failed else 'dim'}]{failed:,}[/]   "
                   f"保留的死图链 [dim]{dead_total}[/dim]")
+    if failed:
+        raise typer.Exit(1)
 
 
 @app.command()

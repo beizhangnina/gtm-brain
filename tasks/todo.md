@@ -39,13 +39,14 @@
 
 ## Phase 2 — 索引与服务
 - [x] `deploy/` 三件套写完，钉 gbrain **v0.51.0.0** (`d13aa74`)
-- [x] 部署到 Railway（新加坡区），`/health` 返回 `{status:ok, version:0.51.0.0, engine:postgres}`
+- [x] 部署到 Railway（~~新加坡区~~ 实际是 us-west2，2026-09-22 才改到新加坡，见 G-013），`/health` 返回 `{status:ok, version:0.51.0.0, engine:postgres}`
 - [x] 154 个 migration 应用完成，schema v159，`takes.embedding` 确认 vector(1024)
 - [x] `brain.py` + `notes.py` + `ingest` 命令（dry-run 已验证，**等 brain 部署才能实推**）
 - [x] **端到端通过**：Fletch PMM / Kolleno 推入后回读，正文含 4 个绝对 URL，
       从 URL 取图肉眼确认整页截图文字清晰
-- [ ] 全量 ingest **进行中**（nohup 后台，4 worker，实测 3.2 篇/分钟，约 6.3h）
-- [ ] `get_stats` 的 `page_count` 对得上扫描篇数
+- [x] 全量 ingest 完成：**1,249/1,249，失败 0**（2026-09-22）。最后 45 篇在换区后 38 秒跑完（G-013）
+- [x] 页数对账：服务端 `pages` 1,249 = vault 1,249；7,275 个 chunk 全部有 embedding
+      （`get_stats` 要 admin scope，改为直接只读查库）
 
 ## Phase 3 — 多模态索引
 - [ ] 图片作为 `page_kind='image'` 页入 brain（先不开 OCR）
@@ -56,7 +57,7 @@
 - [x] `docs/INSTALL-FOR-TEAMMATES.md`
 - [ ] **先配到阿蓓自己机器上**（防荒废）
 - [ ] 每人一个 OAuth client（read scope）
-- [ ] launchd 每周三/日对账
+- [x] launchd 每周六 09:00 对账（`bin/weekly-sync`，runbook 见 OPERATIONS.md）
 - [ ] 修存量问题：11 个死图链 / HTML title 后缀 / Growth Unhinged 的 12 处裸 `images/`
 
 ## 当前卡点（需要阿蓓操作）
@@ -88,5 +89,16 @@
    指向已不存在的 `04-GTM/`，原图确实没了，要靠 grokbot 重抓）。
    对账器**原样保留**这些链接，不擅自吞掉。
 
-## Review
-（完工后填：做了什么、偏离计划的地方、遗留项）
+## Review（Phase 1–2，2026-09-22）
+
+**做了什么**：vault → 图片瘦身（2.57GB → 516MB）→ Supabase 存储 → gbrain MCP（Railway）；
+1,249 篇笔记、7,260 条图片引用全部入库，每周自动对账。
+
+**偏离计划的地方**：
+- 全量回填花了约两天，而不是计划的 6 小时。根因是 Railway 实际部署在 us-west2、数据库在新加坡，
+  每页写入占锁 ~60s 导致连锁卡死（G-013）。换区后速度快了约 70 倍。
+- 中途两次崩溃：连接层异常没重试（G-011）、启动阶段 token 超时（G-012）。
+
+**遗留项**：
+- 用户在全部完成后换 Supabase 数据库密码（旧连接串曾暴露在对话里）。换完要同步更新本地 `.env` 和 Railway 变量。
+- Phase 3（图片多模态索引）、Phase 4 剩余（配到自己机器、每人一个 OAuth client、修存量死图链）。

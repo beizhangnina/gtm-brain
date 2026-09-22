@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS notes (
     seen_at          TEXT NOT NULL,
     slug             TEXT,
     ingested_sha256  TEXT,
+    pushed_sha256    TEXT,   -- 实际推进 brain 的 markdown 的 sha256（G-014）
     ingested_at      TEXT,
     error            TEXT
 );
@@ -47,6 +48,10 @@ class State:
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.executescript(SCHEMA)
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(notes)")}
+        if "pushed_sha256" not in cols:
+            # 旧库补列。留空 = 下一次 ingest 会把所有笔记重推一遍（G-014）
+            self.conn.execute("ALTER TABLE notes ADD COLUMN pushed_sha256 TEXT")
         self.conn.commit()
 
     def close(self) -> None:

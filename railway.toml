@@ -23,4 +23,12 @@ restartPolicyMaxRetries = 3
 
 # 单 replica：brain 数据在 Postgres，多 replica 共享同库没问题，
 # 但 admin token 是 per-instance 生成的，暂时保持单副本简化运维。
+#
+# ⚠️ 区域必须跟 Supabase（ap-southeast-1 新加坡）同区。gbrain 每写一页要在
+# 一个事务里顺序跑几百条 SQL，跨太平洋每条 ~170ms → 一页占锁 ~60s，
+# 超过 30s 的写入租约，引发租约过期 / 回收 / 锁等待连锁卡死（G-013）。
+# 之前 dashboard 默认给的是 us-west2。
+# ⚠️ 这段实测**不会**覆盖环境级配置 —— 真正生效的是用 GraphQL
+# serviceInstanceUpdate 改的环境配置（见 G-013）。保留这段作为意图声明。
+[deploy.multiRegionConfig.asia-southeast1-eqsg3a]
 numReplicas = 1

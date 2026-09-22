@@ -125,3 +125,150 @@ HTTP 200、`jsonrpc` 无 `error`，只看 `"error" in resp` 会把失败当成�
 `mcp_error()` 一开始把错误文本截到 400 字符再返回，调用方拿去 `json.loads`
 直接炸（`Unterminated string`）——而那个 JSON 里正好装着判断是不是
 `write_pending` 所需的信息。截断留到最终抛异常时再做。
+
+## G-010：ingest 并发的甜点是 4，不是越多越好
+
+实测同一台机器、同一个 brain：
+
+| workers | 吞吐 |
+|---|---|
+| 1 | 1.4 篇/分钟 |
+| **4** | **3.2 篇/分钟** ← 甜点 |
+| 6 | 1.3 篇/分钟（比单线程还差） |
+| 8 | 触发大量 `storage_error`（20 篇失败 16 篇，当时还没做重试） |
+
+单篇固定开销约 40s。~~当时归因于 Voyage embedding 往返~~ ——
+**这个归因是错的**，真正原因是 Railway 实际跑在 us-west2、数据库在新加坡，
+见 G-013。当时以为「Railway 在新加坡」是因为 project 默认区域写着 southeast，
+但 service 实例被放在了 us-west2，没人核实过。
+
+超过 4 路并发后，写入准入开始争用，净吞吐反而下降。
+（G-013 之后这组数字作废，需要重测。）
+
+**测吞吐时注意**：进程启动要先 sha256 扫描全部笔记（约 60–90s），
+测量窗口落在这一段会得到严重偏低的数字。第一次测 6 worker 得到
+0.7 篇/分钟就是这么来的，热机后重测才是 1.3。
+
+## G-011：长跑 ingest 要把连接层异常也当成可重试
+
+`put_page_sync` 最初只重试 gbrain **返回**的业务错误
+（`write_pending` / `storage_error`），漏了 httpx **抛出**的连接异常。
+实测 450 篇里有 5 篇栽在 `RemoteProtocolError: Server disconnected` 上 ——
+跑几小时的任务，服务端偶尔断连是必然的。
+
+**能安全重试的前提**：写入由 `request_id` 保证幂等。
+即使服务端其实已经收下了这次写入，用同一个 request_id 重发也不会写两遍。
+没有这个保证的话，盲目重试会造成重复数据。
+
+覆盖：`RemoteProtocolError` / `ReadTimeout` / `WriteTimeout` /
+`ConnectTimeout` / `ConnectError` / `ReadError` / `WriteError` / `PoolTimeout`，
+指数退避，最多 6 次。
+
+## G-012：一次启动阶段的超时，崩掉了跑了 11 小时的任务
+
+**现象**：给 `put_page_sync` 加完网络重试后重启 ingest，进程「启动成功」，
+但实际在启动阶段就崩了、一篇没跑。栈是
+`cli.py:310 in ingest → brain.py:74 in token` → `ReadTimeout`。
+
+**原因**：重试只加在了 `put_page_sync` 内部，而启动时的
+`bc.token()` / `bc.initialize()` 是裸调用。一次 OAuth token 取不到，
+整个进程直接退出。
+
+**更深的教训（两条）**：
+1. **凡是走网络的调用都要包重试，不只是主循环里那个。**
+   现在有 `brain.with_network_retry()` 通用封装。
+2. **重启后必须确认它真的在动，不能看到「进程已启动」就走人。**
+   当时的验证命令被转到后台，输出没被读，于是崩溃悄无声息 ——
+   等再看进度时才发现数字纹丝不动。
+   **验证要看"进度有没有增长"，不是"进程在不在"。**
+
+## G-013：服务端和数据库跨太平洋，一页写入占锁 60 秒，连锁卡死
+
+**现象**：全量 ingest 越跑越慢（每小时 79 → 51 → 37 → 16 → 8 篇），
+并且反复出现整段 20–34 分钟**一篇都进不去**的停顿，失败信息是
+`storage_error: Write admission is temporarily blocked by database contention`。
+我一开始把它当成「Supabase 那边的锁争用、只能等」—— **这是错的，没查根因就下了结论。**
+
+**怎么查出来的**（下次照这个顺序，20 分钟能定位）：
+1. 在 gbrain 源码里 grep 报错原文 → `src/core/persistence/admission-retry.ts`。
+   它只在 Postgres 返回 `40001/40P01/55P03/57014`（序列化冲突/死锁/拿不到锁/语句超时）
+   且 5 秒内重试不成功时才抛这个错。所以是**锁**，不是容量。
+2. 直连数据库每 5s 采样 `pg_stat_activity` + `pg_blocking_pids()`
+   （脚本思路：只看 `application_name='Supavisor' and state<>'idle'`）。看到：
+   - 任意时刻只有**一个**长事务在写页面（`INSERT pages → tags → content_chunks → page_aliases`），
+     持续 ~60s；
+   - 每条 SQL 自身耗时 0s，事务的时间全耗在语句之间的 `ClientRead` ——
+     **数据库在等服务端发下一条**；
+   - 被它挡住的有：写入租约续期 `UPDATE persistence_requests SET claim_expires_at`、
+     过期回收 `SET state='queued'`、甚至 OAuth 取 token 的 `SELECT oauth_clients`。
+3. 读 `consumer.ts`：同一 source 同一时刻只写一页（`activeRoots` 按 source 串行），
+   写入租约 `leaseMs = 30_000`。
+4. `railway status --json` 看 `serviceManifest.deploy.multiRegionConfig` → **`us-west2`**；
+   数据库 host 是 `aws-0-ap-southeast-1.pooler.supabase.com`（新加坡）。
+
+**因果链**：每页一个事务里几百条顺序 SQL × 跨太平洋 ~170ms RTT ≈ 60s 占锁
+→ 超过 30s 租约 → 租约过期被回收、同一页被重做（昨天日志里同一页出现两次就是这个）
+→ 续期、回收、准入、取 token 全排在那行锁后面 → 整段卡死。
+**客户端开几个 worker 都没用**：服务端对同一 source 是严格串行的，
+多开只是多抢那行全局计数器（`persistence_counters` 里 key='brain'）的锁。
+
+**修复**：service 挪到 `asia-southeast1-eqsg3a`，跟 Supabase 同区。
+service 没挂 volume（`/data` 是启动时生成的配置，OAuth client 在库里），
+换区就是一次重新部署，无数据迁移。
+
+**结果**（2026-09-22 实测）：
+
+| | 换区前（us-west2） | 换区后（新加坡） |
+|---|---|---|
+| 单页写入事务 | ~60s | 采样 5s 间隔内看不到长事务 |
+| 吞吐 | 0.6–1 篇/分钟，间歇整段卡死 | **45 篇 / 38 秒 ≈ 70 篇/分钟** |
+| 失败 | 反复出现 900s 超时 | 0 |
+
+服务端核对：`pages` 1,249 行 = vault 1,249 篇；`content_chunks` 7,275 个，
+`embedding is null` 为 0。
+
+**换区本身踩的三个坑**（下次别再绕）：
+1. **`railway.toml` 里写 `multiRegionConfig` 不生效。** 部署元数据里能看到文件提供了这个字段，
+   但环境级配置（`environment.config.services.<id>.deploy.multiRegionConfig`）里的 us-west2 优先。
+   必须用 GraphQL 改环境配置：
+   `serviceInstanceUpdate(serviceId, environmentId, input:{multiRegionConfig:{"asia-southeast1-eqsg3a":{numReplicas:1},"us-west2":null}})`。
+   （toml 里的那段保留，作为文档和意图声明。）
+2. **`railway redeploy` 复用上一次部署的配置快照**，改完环境配置后 redeploy 还是旧区域。
+   要 `railway up` 触发一次新部署才会读新配置。
+3. **`railway scale` 在 CLI 4.30.3 里直接 panic**（`Cannot query field "railwayMetal"`），不能用来换区。
+   Railway GraphQL 要带 `User-Agent` 头，否则 403。
+
+**核实区域的正确方法**：`railway status --json` →
+`latestDeployment.meta.serviceManifest.deploy.multiRegionConfig`。
+看的是**最新那次部署**的清单，不是 project 默认区域，也不是 toml。
+
+**教训**：
+- **报错说「数据库争用」时，先问是谁占着锁、为什么占这么久**，而不是默认是对方的问题。
+  `pg_stat_activity` 里 `state='active', wait_event='ClientRead'` 且 `xact_start` 很老 =
+  应用端拿着事务在干别的，这几乎总是延迟或应用逻辑问题。
+- **部署后核实实际区域**，不要信 project 默认值或自己写的文档。
+- 服务端和数据库永远同区；跨区的代价会被「每事务几百条语句」放大几百倍。
+
+## G-014：笔记没变、图后来才上传 → 永远不会重推
+
+**现象**：全量入库后跑了一遍 `bin/weekly-sync`，slim 新处理了 18 张图，upload 新传了 16 张，
+但 ingest 显示「待处理 0」。
+
+**原因**：ingest 只按**笔记源文件**的 sha256 判断要不要重推。
+笔记入库时它引用的图如果还没上传，只能保留相对路径（死链）；之后图补传上来了，
+笔记文件本身没变，于是永远不会被重推，brain 里一直是死链。
+周更场景里这是常态：grokbot 往 vault 同步，图和笔记不一定同一批到。
+
+**修复**：`notes.pushed_sha256` 记录**实际推进 brain 的 markdown**（图片链接重写后）的 sha256。
+每次 ingest 先把全部笔记渲染一遍（1,249 篇约一两秒），渲染结果变了才推。
+这样一次覆盖三种情况：笔记改了、引用的图补传了、渲染逻辑（notes.py）改了。
+
+**附带修正**：写入超时后回读 `get_page` 只能证明**页面存在**，不能证明是**这一版**落了库
+（重推已有页面时这个检查恒为真）。所以回读确认的情况不写 `pushed_sha256`，下次自动重推，
+代价只是一次幂等写入。
+
+**迁移**：旧库补列后 `pushed_sha256` 为空 → 第一次运行全量重推。2026-09-22 实测
+1,249 篇 17 分钟重推完、失败 0，同时验证了 brain 内容与当前管线完全一致。
+
+**教训**：缓存/跳过的 key 必须覆盖**产出物的全部输入**，而不只是最显眼的那一个。
+这里的输入是「笔记 + 图片 URL 映射 + 渲染代码」，只取第一个就会漏。

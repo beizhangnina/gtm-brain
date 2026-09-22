@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>ai.gtm-brain.weekly</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/beizhang/Documents/AI_Dev/gtm-brain/bin/weekly-sync</string>
+  </array>
+
+  <!-- 每周六 09:00 PT。
+       ⚠️ launchd 的 StartCalendarInterval 用的是【本机时区】，不是 PT。
+       本机现在就在 America/Los_Angeles，所以 Hour=9 即 9AM PT。
+       如果以后这台 Mac 换了时区，这里要跟着改，否则会在错误的时间跑。
+
+       Mac 睡眠时 launchd 会在唤醒后补跑；漏跑也无风险 ——
+       内容一直在 Obsidian vault 里，只是晚几天进 brain。 -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key><integer>6</integer>
+    <key>Hour</key><integer>9</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/beizhang/Documents/AI_Dev/gtm-brain</string>
+
+  <!-- uv 装在 ~/.local/bin 或 homebrew，launchd 的 PATH 极简，必须显式给 -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/Users/beizhang/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/Users/beizhang/Library/Logs/gtm-brain/launchd.out</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/beizhang/Library/Logs/gtm-brain/launchd.err</string>
+
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>

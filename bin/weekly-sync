@@ -1,0 +1,47 @@
+#!/bin/bash
+# 每周对账：vault → 瘦身 → 上传 → ingest。
+# 三步各自幂等，所以这个脚本跑多少遍都安全；漏跑一次也只是晚几天进 brain，
+# 内容不会丢（真源一直在 Obsidian vault 里）。
+
+set -uo pipefail
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO"
+
+LOG_DIR="$HOME/Library/Logs/gtm-brain"
+mkdir -p "$LOG_DIR"
+LOG="$LOG_DIR/sync-$(date +%Y%m%d-%H%M%S).log"
+LOCK="$REPO/.sync.lock"
+
+# 单实例锁：定时任务可能跟手动跑撞上，撞上就让定时的这次退出。
+# 用 noclobber 做原子创建，不依赖 flock（macOS 没有）。
+if ! (set -o noclobber; echo "$$" > "$LOCK") 2>/dev/null; then
+  echo "[$(date)] 已有 sync 在跑（PID $(cat "$LOCK" 2>/dev/null)），跳过本次" | tee -a "$LOG"
+  exit 0
+fi
+trap 'rm -f "$LOCK"' EXIT
+
+exec >> "$LOG" 2>&1
+echo "=========================================="
+echo "[$(date)] 开始对账"
+
+run() {
+  echo "--- $* ---"
+  if ! uv run gtm-brain "$@"; then
+    echo "[$(date)] ✗ 失败: gtm-brain $*"
+    return 1
+  fi
+}
+
+fail=0
+run slim            || fail=1
+run upload          || fail=1
+run ingest --workers 4 || fail=1
+
+# ${fail} 必须带花括号：紧跟的全角括号会被 bash 当成变量名的一部分（set -u 下直接报错）
+echo "[$(date)] 对账结束（fail=${fail}）"
+uv run gtm-brain status || true
+
+# 只保留最近 20 份日志
+ls -1t "$LOG_DIR"/sync-*.log 2>/dev/null | tail -n +21 | xargs -r rm -f
+
+exit $fail

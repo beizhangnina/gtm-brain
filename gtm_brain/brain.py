@@ -22,6 +22,21 @@ class BrainError(RuntimeError):
 # 把它们当失败处理，会在并发下损失大批写入 —— 实测 8 并发时 20 篇失败 16 篇。
 RETRYABLE_WRITE_ERRORS = {"write_pending", "storage_error"}
 
+# 连接层的瞬时故障。跟上面那组不同，这些不是 gbrain 返回的业务错误，
+# 而是 httpx 层直接抛的异常 —— 长跑 ingest 里服务端偶尔会断连
+# （实测 450 篇里有 5 篇栽在这上面）。写入由 request_id 保证幂等，
+# 重试不会写两遍，所以这里可以放心重试。
+TRANSIENT_NETWORK_ERRORS = (
+    httpx.RemoteProtocolError,
+    httpx.ReadTimeout,
+    httpx.WriteTimeout,
+    httpx.ConnectTimeout,
+    httpx.ConnectError,
+    httpx.ReadError,
+    httpx.WriteError,
+    httpx.PoolTimeout,
+)
+
 
 @dataclass
 class BrainClient:
@@ -141,6 +156,23 @@ def from_config(cfg) -> BrainClient:
     return BrainClient(cfg.brain_url, cfg.brain_client_id, cfg.brain_client_secret)
 
 
+def with_network_retry(fn, *, attempts: int = 6, what: str = "请求"):
+    """把瞬时网络故障挡在外面的通用重试。
+
+    教训：最初只在 put_page_sync 内部重试，结果启动阶段的
+    token() 一次 ReadTimeout 就把整轮跑了 11 小时的任务崩掉了
+    （见 docs/gotchas.md G-012）。凡是走网络的调用都要包一层。
+    """
+    for i in range(1, attempts + 1):
+        try:
+            return fn()
+        except TRANSIENT_NETWORK_ERRORS as exc:
+            if i == attempts:
+                raise BrainError(f"{what}连续失败 {attempts} 次: {exc!r}"[:300]) from exc
+            time.sleep(min(2 ** i, 30))
+    raise BrainError(f"{what}重试耗尽")
+
+
 def mcp_error(resp: dict) -> str | None:
     """MCP 的错误有两种藏法，都要查。
 
@@ -191,8 +223,18 @@ def put_page_sync(
     deadline = time.time() + timeout_s
     last = ""
     backoff = 1.0
+    net_retries = 0
     while time.time() < deadline:
-        resp = bc.call(client, "put_page", args)
+        try:
+            resp = bc.call(client, "put_page", args)
+        except TRANSIENT_NETWORK_ERRORS as exc:
+            net_retries += 1
+            if net_retries > 6:
+                raise BrainError(f"连接反复失败（{net_retries} 次）: {exc!r}"[:400])
+            # 同一个 request_id 重发 —— 服务端可能已经收下了，
+            # 幂等保证不会产生第二次写入
+            time.sleep(min(2 ** net_retries, 30))
+            continue
         err = mcp_error(resp)
         if err is None:
             return resp
