@@ -53,3 +53,5 @@
   `LC_ALL=C grep -n '\$[A-Za-z_][A-Za-z0-9_]*[^ -~]' bin/*`，有输出就改成 `${var}`。
 - **测试环境本身也会出 bug**：python3 桩指向 pyenv shim → shim 又找回桩，死循环。
   桩要指向真实可执行文件（`python3 -c 'import sys;print(sys.executable)'`）；macOS 没有 `timeout` 命令。
+- **校验和提交不能用 `;` 串在一起。** `bash -n` 报了语法错，但后面的 `git commit && git push` 照样执行，
+  把坏脚本推了上去（6779953，随后 f459d3f 修复）。校验步骤要用 `set -e` 或 `&&` 挡在提交前面。
