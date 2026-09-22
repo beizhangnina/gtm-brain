@@ -48,10 +48,10 @@
 - [x] 页数对账：服务端 `pages` 1,249 = vault 1,249；7,275 个 chunk 全部有 embedding
       （`get_stats` 要 admin scope，改为直接只读查库）
 
-## Phase 3 — 多模态索引
-- [ ] 图片作为 `page_kind='image'` 页入 brain（先不开 OCR）
-- [ ] `search_by_image` 实测：传 dashboard 截图，看 top-5 是否真相似
-- [ ] 按系列选择性开 OCR（Fletch PMM 优先）
+## Phase 3 — 多模态索引（2026-09-22 阿蓓决定：不做）
+只需要用文字找内容，不需要以图搜图。图片 URL 已经在正文里，agent 找到笔记后照样能看图。
+Fletch PMM 的笔记正文已有 before/after 对比和分析的文字，OCR 边际收益低。
+**什么时候再考虑**：实际使用中出现「截图里有这个词、文字搜不到」时，只给 Fletch PMM 开 OCR。
 
 ## Phase 4 — 接入与自动化
 - [x] `docs/INSTALL-FOR-TEAMMATES.md`
