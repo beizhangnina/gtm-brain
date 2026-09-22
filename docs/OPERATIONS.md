@@ -15,6 +15,7 @@
 | Storage bucket | `gtm-assets`（public read，路径是内容 SHA-256） |
 | gbrain 版本 | v0.51.0.0 · `d13aa742fd68b71bfd6c98be3dda5813791f1d6c` |
 | Embedding | `voyage:voyage-4` @1024 / 图片 `voyage:voyage-multimodal-3` @1024 |
+| LLM（think 综合 + query 扩展） | `deepseek:deepseek-v4-flash`，base_url 改到 flatkey（`https://router.flatkey.ai/v1`）；Railway 变量 `DEEPSEEK_API_KEY` = flatkey 的 gtm-brain 专用 key。一次 think 约 $0.005、1–3 分钟。换模型设 `GTM_BRAIN_LLM_MODEL` |
 
 ## 常用操作
 
