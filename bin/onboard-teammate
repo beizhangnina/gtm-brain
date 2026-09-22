@@ -57,7 +57,7 @@ EOF
 chmod 700 "$D"/*.py
 rm -f "$D/token.json"
 
-python3 "$D/headers.py" >/dev/null 2>&1 || { echo "✗ 凭证换不到 token，把这句话发给阿蓓"; exit 1; }
+python3 "$D/headers.py" >/dev/null 2>&1 || { echo "✗ 凭证换不到 token，把这句话发给 Bei"; exit 1; }
 echo "✓ 凭证有效"
 
 installed=""
@@ -80,6 +80,7 @@ fi
 echo ""
 echo "✓ 完成，已装进 ${installed}。重开一个会话（Codex 要重启 App），直接问 GTM 问题就行，"
 echo "  比如：B2B SaaS 首页定位有哪些好的改版案例？"
+echo "  想确保它一定先查库，就在问题里加一句「用 gtm-brain」。"
 EOF
 } > "$OUT"
 chmod 600 "$OUT"

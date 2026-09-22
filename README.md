@@ -27,12 +27,12 @@
 
 ---
 
-## 二、找阿蓓要安装文件
+## 二、找 Bei 要安装文件
 
-仓库是私有的，服务也只对开通了的人开放。**私信阿蓓（Bei Zhang，GitHub [@beizhangnina](https://github.com/beizhangnina)）说一声**，
-告诉她你想用，以及你的英文名（比如 `alice`）。
+仓库是私有的，服务也只对开通了的人开放。**私信 Bei（Bei Zhang，GitHub [@beizhangnina](https://github.com/beizhangnina)）说一声**，
+告诉他你想用，以及你的英文名（比如 `alice`）。
 
-她会发你一个文件：**`你的名字-install.sh`**。
+他会发你一个文件：**`你的名字-install.sh`**。
 
 - 这是**只给你一个人用的**：里面有你的个人凭证。**别转发，也别放进群聊、邮件、网盘或 git。**
 - 凭证是**只读**的：只能搜和读，改不了库里的东西。
@@ -74,7 +74,7 @@
 
 **先重启一次**：新开一个 Claude Code 会话；用 Codex 的话，**彻底退出并重新打开 ChatGPT App**。
 
-然后**直接用中文或英文问就行，不用提「gtm-brain」**。几个例子，以及你大概会看到什么：
+然后**直接用中文或英文问就行**。几个例子，以及你大概会看到什么：
 
 | 你问 | 它会去找的（实测结果） |
 |---|---|
@@ -82,6 +82,10 @@
 | 免费试用怎么优化转化？ | Growth Unhinged 的免费试用优化、reverse trial 指南，MRR Unlocked 的免费试用 8 条要点 |
 | 定价策略怎么做？ | Growth Unhinged 的定价项目方法、Playbooks 的定价策略手册、Lenny's 的 B2B 增长引擎 |
 | 产品发布前要准备什么？ | Playbooks 的发布策略和 Product Hunt 发布指南 |
+
+> **要不要说「gtm-brain」？** 不说也行：安装时已经加了规则，问 GTM 相关的问题它会自动先查库。
+> 但它有时会判断「这题不用查」而直接凭自己的知识回答。**想确保它一定先查库，就在问题里加一句「用 gtm-brain」**，
+> 比如「用 gtm-brain 查一下，免费试用怎么优化转化？」
 
 **你会得到**：基于原文的回答，带出处（系列 + 文章标题），需要时附上原文里的图片链接。
 **中文提问也能搜到英文文章**。每次查库大约 4–6 秒。
@@ -101,12 +105,12 @@
 
 | 现象 | 怎么办 |
 |---|---|
-| 安装时报「凭证换不到 token」 | 凭证可能已经失效。找阿蓓重新发一个安装文件 |
+| 安装时报「凭证换不到 token」 | 凭证可能已经失效。找 Bei 重新发一个安装文件 |
 | 安装时报「没找到 Claude Code 也没找到 Codex」 | 先装其中一个，再重新运行安装文件 |
-| Claude / Codex 回答时没有去查库 | 1）确认重启过（新会话 / 重开 App）；2）Claude Code 里输入 `/mcp` 看是否 connected；3）实在不行，问的时候加一句「用 gtm-brain 查」 |
-| 其他报错 | 在终端运行 `python3 ~/.config/gtm-brain/headers.py`，把输出发给阿蓓（不会显示你的密码） |
+| Claude / Codex 回答时没有去查库 | 1）问题里加一句「用 gtm-brain」，确保优先查库；2）确认重启过（新会话 / 重开 App）；3）Claude Code 里输入 `/mcp` 看是否 connected |
+| 其他报错 | 在终端运行 `python3 ~/.config/gtm-brain/headers.py`，把输出发给 Bei（不会显示你的密码） |
 | 换了新电脑 | 在新电脑上再运行一次同一个安装文件就行 |
-| 不想用了 / 离职 | 告诉阿蓓，她会注销你的凭证，立刻生效 |
+| 不想用了 / 离职 | 告诉 Bei，他会注销你的凭证，立刻生效 |
 
 ---
 
@@ -119,57 +123,3 @@
 - 安装文件和凭证只给你自己用
 
 更详细的安装说明（原理、每一步做了什么）：[docs/INSTALL-FOR-TEAMMATES.md](docs/INSTALL-FOR-TEAMMATES.md)
-
----
----
-
-## 给维护者（阿蓓）
-
-> 以下是维护这个服务的人看的。只是使用的话，读到上面就够了。
-
-### 开通 / 注销同事
-
-见仓库根目录 **[`add teammate - for bei.txt`](add%20teammate%20-%20for%20bei.txt)**：
-`bin/onboard-teammate <名字>` 生成安装文件，台账记在 `onboarding/clients.log`（已 gitignore）。
-
-### 架构
-
-**这个仓库是一个 vault 对账器**：只读阿蓓的 Obsidian vault（Grok Bot 在持续往里抓取更新），
-把变化推进托管的 brain。它不是爬虫。服务端直接用 [garrytan/gbrain](https://github.com/garrytan/gbrain)，钉在 v0.51.0.0。
-
-```
-Obsidian vault（只读真源，永不写入）
-        ↓
-  1. 按 sha256 找出变化的 .md 和图片
-  2. 图片瘦身 → WebP 衍生品
-  3. 内容寻址上传 → Supabase Storage（新加坡）
-  4. 正文 ./images/... → 公网绝对 URL
-  5. 渲染结果变了才 put_page → gbrain
-        ↓
-  Railway 上的 gbrain HTTP MCP（新加坡，与数据库同区）
-        ↓
-  用户的 Claude Code（headersHelper）/ Codex（本地 stdio 桥接）
-```
-
-- **vault 存原图，云端存瘦身衍生品**：只在 ingest 时重写链接，vault 文件一个字节都不动。
-  图片 2,568 MB → 516 MB（省 80%）；缩放按宽度限制，不是最长边（见 gotchas G-001）。
-- **全流程幂等**：每一步跑一百遍结果一样，中断随时重跑。是否重推按「实际推送的内容」判断（G-014）。
-- **Railway 必须和 Supabase 同区**：跨区时每页写入占锁 ~60s，会连锁卡死（G-013）。
-
-### 日常运维
-
-```bash
-uv sync
-uv run gtm-brain status    # vault 现状 + 对账进度
-bin/weekly-sync            # slim → upload → ingest，全部幂等
-```
-
-每周六 09:00 PT 由 launchd 自动跑 `bin/weekly-sync`，日志在 `~/Library/Logs/gtm-brain/`。
-正常一次周更约 15 秒；**超过 10 分钟一定有问题**，按 OPERATIONS.md 的排查顺序查。
-
-### 文档
-
-- [docs/OPERATIONS.md](docs/OPERATIONS.md) — 运维速查：资源标识、每周 runbook、排查顺序、换数据库密码、已知工具坑
-- [docs/gotchas.md](docs/gotchas.md) — 踩过的坑，**动这个项目前先读一遍**
-- [docs/INSTALL-FOR-TEAMMATES.md](docs/INSTALL-FOR-TEAMMATES.md) — 用户安装的详细说明
-- [tasks/todo.md](tasks/todo.md) — 实施进度 · [tasks/lessons.md](tasks/lessons.md) — 经验教训

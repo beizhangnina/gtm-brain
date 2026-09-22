@@ -20,15 +20,12 @@ Fletch PMM（Before/After 定位对比）、MRR Unlocked，外加一批 GTM play
 
 ---
 
-## 第 1 步：找阿蓓要安装脚本
+## 第 1 步：找 Bei 要安装文件
 
-每个人一套独立的只读凭证，能单独撤销，互不影响。阿蓓那边跑：
+私信 Bei（GitHub @beizhangnina），告诉他你的英文名（比如 `alice`）。
+每个人一套独立的只读凭证，能单独注销，互不影响。
 
-```bash
-bin/onboard-teammate <你的名字>
-```
-
-会生成一个 `<你的名字>-install.sh`，她会 AirDrop 或私聊发给你。**装好后把那条消息删掉。**
+他会发你一个 `<你的名字>-install.sh`（通常是 AirDrop 或私聊）。**装好后把那条消息删掉。**
 **这个文件里有你的个人凭证，别转发、别提交到任何地方。**
 
 ## 第 2 步：跑一次
@@ -84,8 +81,8 @@ bash <你的名字>-install.sh
 
 | 现象 | 原因 |
 |---|---|
-| 安装脚本报「凭证换不到 token」 | 凭证被撤销或网络不通。找阿蓓重新生成 |
-| Claude Code 里 `/mcp` 显示 gtm-brain 连不上，或 Codex 里没有 gtm-brain 工具 | 在终端跑 `python3 ~/.config/gtm-brain/headers.py`，报错信息发给阿蓓 |
+| 安装脚本报「凭证换不到 token」 | 凭证被撤销或网络不通。找 Bei 重新生成 |
+| Claude Code 里 `/mcp` 显示 gtm-brain 连不上，或 Codex 里没有 gtm-brain 工具 | 在终端跑 `python3 ~/.config/gtm-brain/headers.py`，报错信息发给 Bei |
 | `insufficient_scope` | 你在调一个需要 `admin` 或 `write` 的工具。同事只有 `read`，正常 |
 | 图片打不开 | 图片是公开 URL，不需要凭证。打不开说明是网络问题，不是权限问题 |
 
@@ -94,7 +91,7 @@ bash <你的名字>-install.sh
 ## 关于图片
 
 正文里的图片是**瘦身过的 WebP**，存在 Supabase Storage 上，URL 是内容哈希、
-不可枚举。原图留在阿蓓的 Obsidian vault 里，没动过。
+不可枚举。原图保留在源头，没动过。
 
 这些内容来自付费订阅（Lenny's 等）。URL 不可猜、不被搜索引擎收录，
 但**请不要把它们贴到公开的地方**。
