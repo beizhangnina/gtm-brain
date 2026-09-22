@@ -101,7 +101,51 @@
 
 ---
 
-## 五、遇到问题
+## 五、举个例子：同一个问题，接不接库的差别
+
+**问题**：EverOS（AI agent 的记忆层，Apache 2.0 开源 + 托管云服务，免费版 5 万 MCU，Pro $25/月，官网还没有公开客户案例）**该怎么做冷启动？**
+
+同一个模型（Claude Opus 5），同一个问题，唯一的区别是有没有接 gtm-brain。右边是 2026-09-22 真实检索的结果。
+
+### 不接库的回答
+
+> 建议分四步走：
+> 1. **先把开源做起来**：把 README 和 quickstart 打磨好，让人五分钟能跑通；在 GitHub 上积累 star 和 issue 互动。
+> 2. **内容营销**：写技术博客讲你的记忆架构和 benchmark，发到 Hacker News、Reddit r/LocalLLaMA、X 的 AI 开发者圈。
+> 3. **生态集成**：接进 LangChain、LlamaIndex 这类框架的生态，借它们的分发。
+> 4. **早期用户**：找几十个种子用户深聊，把免费额度给足，观察他们怎么用，再决定付费点。
+>
+> 定价上，免费版引流、Pro 订阅变现的思路是对的，可以再考虑按用量计费。
+
+**问题在哪**：每一条都对，但每一条都是通用套路。没有任何一个真实公司的做法、没有数字、没有出处，也没告诉你这些建议在**你这个具体处境**下哪条会翻车。
+
+### 接了库的回答
+
+> **1. 开源转云，先看 Cockroach Labs 怎么走的。**
+> 他们一开始就开源（创始人 Spencer Kimball 说他自己都不会用闭源数据库），之后才加上自托管专有版和专用云。他的提醒：**企业段的安全合规比你预期的久得多，销售周期会长好几个月**——所以开源社区和企业销售要当两条线并行，不能指望社区自然转化。
+> 出处：Growth Unhinged《Lessons learned scaling to $5B with Cockroach Labs' CEO》 · https://www.growthunhinged.com/p/scaling-to-5b-with-cockroach-labs
+>
+> **2. 你的免费版和传统 SaaS 的免费版不是一回事。**
+> 传统 SaaS 多一个免费用户，成本几乎为零；AI 产品每一次免费调用都在烧 GPU，**免费额度给不对会直接烧穿现金**。所以 5 万 MCU 这个额度要按「单个免费用户的真实计算成本 × 转化率」倒推，而不是照抄 SaaS 的免费额度。
+> 出处：Lenny's Newsletter《Why SaaS freemium playbooks don't work in AI, and what to do instead》 · https://www.lennysnewsletter.com/p/why-saas-freemium-playbooks-dont
+>
+> **3. 前 10 个客户靠的是三条杠杆，不是内容营销。**
+> 二十多家高速增长的 B2B 公司（Figma、Stripe、Slack、Airtable 等）的共同做法：**用个人网络、去客户扎堆的地方找、拿到媒体报道**。Figma 的 Dylan Field 是在 Twitter 上先找出最有影响力的设计师，筛一遍名单，再逐个冷邮件或要引荐。
+> 出处：Lenny's Newsletter《How today's fastest growing B2B businesses found their first ten customers》 · https://www.lennysnewsletter.com/p/how-todays-fastest-growing-b2b-businesses
+> 想要更细的打法，库里还有一篇《How to find and win your first 10 B2B customers》 · https://www.lennysnewsletter.com/p/how-to-win-your-first-10-b2b-customers
+>
+> **4. 免费送哪些功能是有方法的**，不是「先免费再说」。
+> 出处：Growth Unhinged《Why you should give away your features》 · https://www.growthunhinged.com/p/why-you-should-give-away-your-features
+>
+> **5. 冷启动预算的真实回报**（库里 playbook 的 2026 年基准）：约 $1K 能换来几百个注册（小额 YouTube 广告测试 + 二十来个细分 subreddit + 私信流程）；约 $5K 可以冲到 24 小时 1,800 票，但有案例当天第一被事后复核撤销——花这笔钱前先看清平台规则。
+
+**差别在哪**：右边给的是**具体公司怎么做的、哪一步会踩坑、数字是多少**，每条都能点开原文核对。尤其第 2 条——"AI 的免费额度会烧 GPU"这种判断，来自 2026 年 5 月的一篇文章，是模型自身知识里不一定有、也不一定会主动提起的。
+
+> 两边都是真实输出：左边是同一个模型不查库时的真实回答，右边是真实检索结果。我们没有刻意把左边写差。
+
+---
+
+## 六、遇到问题
 
 | 现象 | 怎么办 |
 |---|---|
@@ -114,7 +158,7 @@
 
 ---
 
-## 六、使用规范
+## 七、使用规范
 
 这是一个**内部使用的工具**，不对外提供、不做商业用途。库里有**付费订阅内容**（Lenny's 等），版权归原作者：
 
