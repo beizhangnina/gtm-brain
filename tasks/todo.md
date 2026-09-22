@@ -55,10 +55,12 @@ Fletch PMM 的笔记正文已有 before/after 对比和分析的文字，OCR 边
 
 ## Phase 4 — 接入与自动化
 - [x] `docs/INSTALL-FOR-TEAMMATES.md`
-- [ ] **先配到阿蓓自己机器上**（防荒废）
-- [ ] 每人一个 OAuth client（read scope）
+- [x] 配到阿蓓自己机器上（2026-09-22，headersHelper 方案，中英文搜索实测通过）
+- [x] 每人一个只读凭证：`bin/onboard-teammate <名字>` 生成一键安装脚本（等阿蓓给同事发）
 - [x] launchd 每周六 09:00 对账（`bin/weekly-sync`，runbook 见 OPERATIONS.md）
-- [ ] 修存量问题：11 个死图链 / HTML title 后缀 / Growth Unhinged 的 12 处裸 `images/`
+- [x] 修存量问题：标题后缀、Growth Unhinged 裸路径已修；.bin 图片纳入管线（-2 处死链）
+      剩余 34 处死链原图确实不在 vault 里：GEO 红皮书 15（疑似在 `04-GTM/SEO-GEO/assets`，待阿蓓确认）、
+      404 页面 11（原路径已不存在，需 grokbot 重抓）、6 个 grokbot 存坏的文件、2 处其他
 
 ## 当前卡点（需要阿蓓操作）
 
