@@ -28,7 +28,7 @@ Fletch PMM（Before/After 定位对比）、MRR Unlocked，外加一批 GTM play
 bin/onboard-teammate <你的名字>
 ```
 
-会生成一个 `<你的名字>-install.sh`，她通过 1Password 等私密渠道发给你。
+会生成一个 `<你的名字>-install.sh`，她会 AirDrop 或私聊发给你。**装好后把那条消息删掉。**
 **这个文件里有你的个人凭证，别转发、别提交到任何地方。**
 
 ## 第 2 步：跑一次

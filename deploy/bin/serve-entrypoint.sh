@@ -44,6 +44,16 @@ echo "[entrypoint] GBRAIN_DIR=$GBRAIN_DIR"
 # ⚠️ embedding_model / embedding_dimensions 在 initSchema 之前就决定向量列宽。
 # 第一次启动配错 = 整库要重建。voyage-4 原生 1024 维。
 # embedding_multimodal 默认关闭，必须显式打开才会给图片建向量。
+# LLM（think 综合 + query 扩展）走 flatkey 上的 deepseek-v4-flash，只为省钱。
+# 借用 gbrain 的 deepseek recipe（它会把 reasoning_content 提到 content），
+# 只把 base_url 换成 flatkey；key 放在 DEEPSEEK_API_KEY（flatkey 的 gtm-brain 专用 key）。
+# think 选模型：models.think → models.default → GBRAIN_MODEL，所以这里导出 GBRAIN_MODEL。
+LLM_MODEL="${GTM_BRAIN_LLM_MODEL:-deepseek:deepseek-v4-flash}"
+export GBRAIN_MODEL="$LLM_MODEL"
+if [ -z "$DEEPSEEK_API_KEY" ]; then
+  echo "[entrypoint] WARN: DEEPSEEK_API_KEY 未设置 —— think 只会返回原文摘录，query 不做扩展" >&2
+fi
+
 cat > "$GBRAIN_DIR/config.json" <<JSON
 {
   "engine": "postgres",
@@ -51,11 +61,14 @@ cat > "$GBRAIN_DIR/config.json" <<JSON
   "embedding_model": "voyage:voyage-4",
   "embedding_dimensions": 1024,
   "embedding_multimodal": true,
-  "embedding_multimodal_model": "voyage:voyage-multimodal-3"
+  "embedding_multimodal_model": "voyage:voyage-multimodal-3",
+  "chat_model": "${LLM_MODEL}",
+  "expansion_model": "${LLM_MODEL}",
+  "provider_base_urls": { "deepseek": "https://router.flatkey.ai/v1" }
 }
 JSON
 chmod 600 "$GBRAIN_DIR/config.json"
-echo "[entrypoint] config written (engine=postgres, embed=voyage:voyage-4@1024, multimodal=on)"
+echo "[entrypoint] config written (engine=postgres, embed=voyage:voyage-4@1024, multimodal=on, llm=${LLM_MODEL} via flatkey, key len=${#DEEPSEEK_API_KEY})"
 
 # ============================================================
 # 3. Public URL（OAuth issuer 要用）

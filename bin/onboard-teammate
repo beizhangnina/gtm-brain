@@ -4,7 +4,7 @@
 # 用法：bin/onboard-teammate <名字>        # 名字用英文，比如 alice
 # 产物：onboarding/<名字>-install.sh      # 含凭证，已 gitignore
 #
-# 把安装脚本通过 1Password 等私密渠道发给对方，对方跑一次：
+# 把安装脚本 AirDrop 或私聊发给对方（装好后删消息），对方跑一次：
 #   bash <名字>-install.sh
 # 就装进了他的 Claude Code 和/或 Codex。撤销：bin/onboard-teammate 打印的 revoke 命令。
 #
@@ -88,5 +88,9 @@ unset SECRET
 echo ""
 echo "✓ 已生成 $OUT"
 echo "  client_id: $ID"
-echo "  发给对方（走 1Password 等私密渠道），对方跑：bash $NAME-install.sh"
-echo "  撤销：railway ssh -s gtm-brain bun /app/src/cli.ts auth revoke-client $ID"
+REVOKE="railway ssh -s gtm-brain bun /app/src/cli.ts auth revoke-client $ID"
+# 台账：以后要撤销谁，翻这个文件就行（onboarding/ 已 gitignore）
+printf '%s\t%s\t%s\t%s\n' "$(date +%F)" "$NAME" "$ID" "$REVOKE" >> "$OUT_DIR/clients.log"
+echo "  发给对方：AirDrop 最好；远程就私聊发文件，对方装好后把消息删掉。别发群聊、邮件"
+echo "  对方在终端跑：bash $NAME-install.sh"
+echo "  撤销命令已记进 onboarding/clients.log
