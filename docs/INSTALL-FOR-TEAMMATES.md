@@ -1,6 +1,6 @@
 # 接入 GTM Brain
 
-一个装着 1,200+ 篇 GTM newsletter 和 7,000+ 张配图的知识库，
+一个装着 1,249 篇 GTM 文章和 7,000+ 张配图的知识库，
 通过 MCP 接进你的 **Claude Code 和 / 或 Codex**，用文字就能搜。
 
 内容来源：Lenny's Newsletter、Growth Unhinged、Marketing Ideas、
@@ -72,8 +72,8 @@ bash <你的名字>-install.sh
 这个库的强项是**一手的 GTM 实操细节**，不是泛泛的框架。几个好用的问法：
 
 - 「Fletch PMM 里有哪些 fintech 的 Before/After？把改动前后的定位差异总结给我」
-- 「Lenny's 里关于 PLG 到 sales-led 转型的文章，按时间排一下，看观点怎么变的」
-- 「找 2026 年提到 AI 搜索 / GEO 的所有内容」—— 每页都打了 `year:` tag
+- 「PLG 公司怎么加上销售团队？ClickUp、Calendly 这些是怎么做的」
+- 「AI 搜索 / GEO 应该怎么做？有哪些具体步骤」
 
 按 tag 过滤：`series:lennys-newsletter`、`series:fletch-pmm`、
 `source:newsletter`、`source:playbook`、`year:2026`、`industry:fintech`。
