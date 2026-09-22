@@ -62,11 +62,11 @@
 
 ## 当前卡点（需要阿蓓操作）
 
-1. **换数据库密码** —— 我用 `railway variables` 查变量时把完整连接串打进了对话。
+1. ~~**换数据库密码**~~ ✅ 2026-09-22 已完成 —— 我用 `railway variables` 查变量时把完整连接串打进了对话。
    试过用 SQL 轮换，但 Supabase 的 `postgres` 角色不是超级用户，改不了自己。
    → https://supabase.com/dashboard/project/bfcmhbgbomlygoeahhli/settings/database
    Reset database password，然后告诉我，我更新 `.env` + Railway 变量。
-2. **删三个旧 Railway 项目** —— `railway delete` 用项目名和完整 UUID 都报
+2. ~~**删三个旧 Railway 项目**~~ ✅ 已由阿蓓在 dashboard 删除 —— `railway delete` 用项目名和完整 UUID 都报
    "not found"，但 `railway list` 列得出来，workspace 也只有一个。CLI 自身问题。
    - dormy-brain `4afd337e-d6e9-4677-a6e2-b098d7da846a`
    - vibe-trading `cf37f380-6dc5-438f-885e-4ae794f53ea0`
@@ -100,5 +100,5 @@
 - 中途两次崩溃：连接层异常没重试（G-011）、启动阶段 token 超时（G-012）。
 
 **遗留项**：
-- 用户在全部完成后换 Supabase 数据库密码（旧连接串曾暴露在对话里）。换完要同步更新本地 `.env` 和 Railway 变量。
+- ~~换 Supabase 数据库密码~~ ✅ 2026-09-22 已轮换（`bin/rotate-db-password`），端到端验证通过。
 - Phase 3（图片多模态索引）、Phase 4 剩余（配到自己机器、每人一个 OAuth client、修存量死图链）。
