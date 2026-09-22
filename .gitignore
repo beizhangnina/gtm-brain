@@ -26,3 +26,6 @@ derivatives/
 
 # supabase CLI 生成的本地目录
 supabase/
+
+# 同事安装脚本（含凭证）
+onboarding/

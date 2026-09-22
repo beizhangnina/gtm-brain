@@ -1,0 +1,73 @@
+#!/bin/bash
+# 给一个人开通 GTM Brain（只读）：注册独立凭证 → 生成自带凭证的一键安装脚本。
+#
+# 用法：bin/onboard-teammate <名字>        # 名字用英文，比如 alice
+# 产物：onboarding/<名字>-install.sh      # 含凭证，已 gitignore
+#
+# 把安装脚本通过 1Password 等私密渠道发给对方，对方跑一次：
+#   bash <名字>-install.sh
+# 就装进了他的 Claude Code。撤销：bin/onboard-teammate 打印的 revoke 命令。
+#
+# 凭证全程不打印到终端 —— 这个终端的输出可能会进对话或日志。
+
+set -euo pipefail
+NAME="${1:?用法: bin/onboard-teammate <名字>}"
+[[ "$NAME" =~ ^[a-z0-9_-]+$ ]] || { echo "名字只用小写字母、数字、- 和 _"; exit 1; }
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+URL="https://gtm-brain-production.up.railway.app"
+OUT_DIR="$REPO/onboarding"
+OUT="$OUT_DIR/$NAME-install.sh"
+mkdir -p "$OUT_DIR" && chmod 700 "$OUT_DIR"
+
+echo "注册只读凭证：$NAME …"
+RAW="$(railway ssh -s gtm-brain bun /app/src/cli.ts auth register-client "$NAME" \
+  --grant-types client_credentials --scopes read 2>&1 | tr -d '\r')" || {
+  echo "✗ 注册失败："; printf '%s\n' "$RAW" | grep -vi secret | tail -5; exit 1; }
+ID="$(printf '%s\n' "$RAW" | sed -n 's/.*Client ID: *\([^ ]*\).*/\1/p' | head -1)"
+SECRET="$(printf '%s\n' "$RAW" | sed -n 's/.*Client Secret: *\([^ ]*\).*/\1/p' | head -1)"
+unset RAW
+[[ "$ID" == gbrain_cl_* && "$SECRET" == gbrain_cs_* ]] || {
+  echo "✗ 没从输出里解析到凭证（gbrain 输出格式变了？）"; exit 1; }
+
+# 生成安装脚本：凭证和 headers.py 都内嵌进去，对方不需要 clone 仓库
+umask 077
+{
+  cat <<EOF
+#!/bin/bash
+# GTM Brain 一键安装（$NAME 专用，含个人凭证，别转发）
+set -euo pipefail
+D="\$HOME/.config/gtm-brain"
+mkdir -p "\$D" && chmod 700 "\$D"
+cat > "\$D/.env" <<'ENV'
+GTM_BRAIN_URL=$URL
+GTM_BRAIN_CLIENT_ID=$ID
+GTM_BRAIN_CLIENT_SECRET=$SECRET
+ENV
+chmod 600 "\$D/.env"
+cat > "\$D/headers.py" <<'PY'
+EOF
+  cat "$REPO/client/headers.py"
+  cat <<'EOF'
+PY
+chmod 700 "$D/headers.py"
+rm -f "$D/token.json"
+
+python3 "$D/headers.py" >/dev/null 2>&1 || { echo "✗ 凭证换不到 token，把这句话发给阿蓓"; exit 1; }
+echo "✓ 凭证有效"
+
+command -v claude >/dev/null || { echo "✗ 没找到 claude 命令，先装 Claude Code"; exit 1; }
+claude mcp remove gtm-brain -s user >/dev/null 2>&1 || true
+claude mcp add-json gtm-brain -s user \
+  "{\"type\":\"http\",\"url\":\"GTM_URL/mcp\",\"headersHelper\":\"$D/headers.py\"}"
+echo "✓ 已装进 Claude Code。重开一个 Claude Code 会话，问它：用 gtm-brain 搜一下 B2B SaaS 的定位案例"
+EOF
+} | sed "s#GTM_URL#$URL#" > "$OUT"
+chmod 600 "$OUT"
+unset SECRET
+
+echo ""
+echo "✓ 已生成 $OUT"
+echo "  client_id: $ID"
+echo "  发给对方（走 1Password 等私密渠道），对方跑：bash $NAME-install.sh"
+echo "  撤销：railway ssh -s gtm-brain bun /app/src/cli.ts auth revoke-client $ID"

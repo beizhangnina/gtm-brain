@@ -7,7 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
-IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".tif", ".tiff"}
+# .bin：grokbot 拿不到 Content-Type 时会存成 .bin，实测都是正常 JPEG。
+# Pillow 按内容识别格式，所以放进来就能正常瘦身；真不是图的会在 slim 里记错误，不影响别的。
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".tif", ".tiff", ".bin"}
 SKIP_DIRS = {".obsidian", ".trash", ".git", "node_modules", "__pycache__"}
 
 

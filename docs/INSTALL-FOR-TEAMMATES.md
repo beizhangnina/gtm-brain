@@ -1,7 +1,7 @@
 # 接入 GTM Brain
 
 一个装着 1,200+ 篇 GTM newsletter 和 7,000+ 张配图的知识库，
-通过 MCP 接进你的 Claude Code / Codex。**正文能搜，图也能看。**
+通过 MCP 接进你的 Claude Code，用文字就能搜。
 
 内容来源：Lenny's Newsletter、Growth Unhinged、Marketing Ideas、
 Fletch PMM（Before/After 定位对比）、MRR Unlocked，外加一批 GTM playbook。
@@ -20,59 +20,41 @@ Fletch PMM（Before/After 定位对比）、MRR Unlocked，外加一批 GTM play
 
 ---
 
-## 第 1 步：找阿蓓要一份凭证
+## 第 1 步：找阿蓓要安装脚本
 
-每个人一套独立凭证，能单独撤销，互不影响。跟阿蓓说一声，她会跑：
-
-```bash
-railway ssh -s gtm-brain bun /app/src/cli.ts auth register-client <你的名字> \
-  --grant-types client_credentials --scopes read
-```
-
-你会拿到两个值：`client_id`（`gbrain_cl_…`）和 `client_secret`（`gbrain_cs_…`）。
-
-> 同事默认只给 `read`。写入权限只有 ingest 用的那个 client 有 ——
-> 这样任何人的凭证泄露都不会污染知识库。
-
-## 第 2 步：把凭证存在自己机器上
+每个人一套独立的只读凭证，能单独撤销，互不影响。阿蓓那边跑：
 
 ```bash
-mkdir -p ~/.config/gtm-brain
-cat > ~/.config/gtm-brain/.env <<'ENV'
-GTM_BRAIN_URL=https://gtm-brain-production.up.railway.app
-GTM_BRAIN_CLIENT_ID=<你的 client_id>
-GTM_BRAIN_CLIENT_SECRET=<你的 client_secret>
-ENV
-chmod 600 ~/.config/gtm-brain/.env
+bin/onboard-teammate <你的名字>
 ```
 
-凭证存在**你自己**机器上，server 不保存谁在用它。
+会生成一个 `<你的名字>-install.sh`，她通过 1Password 等私密渠道发给你。
+**这个文件里有你的个人凭证，别转发、别提交到任何地方。**
 
-## 第 3 步：接进客户端
-
-**Claude Code**
+## 第 2 步：跑一次
 
 ```bash
-claude mcp add gtm-brain -s user -t http https://gtm-brain-production.up.railway.app/mcp
+bash <你的名字>-install.sh
 ```
 
-首次调用时会走 OAuth 授权。
+它会做三件事：
+1. 把凭证存到 `~/.config/gtm-brain/.env`（权限 600，只有你能读）
+2. 放一个小脚本 `~/.config/gtm-brain/headers.py`，Claude Code 每次连接时用它自动换新 token
+   —— 所以**配一次就永远不用管**，不会一小时后过期
+3. 用 `claude mcp add-json` 把 `gtm-brain` 装进 Claude Code（user 级，所有项目都能用）
 
-**Codex** —— 在 `~/.codex/config.toml` 里加：
+需要：Claude Code 已安装，机器上有 `python3`（macOS 自带）。不需要 clone 任何仓库。
 
-```toml
-[mcp_servers.gtm-brain]
-url = "https://gtm-brain-production.up.railway.app/mcp"
-```
+> 为什么不是普通的 `claude mcp add ... http`：gbrain 的浏览器授权会跳到管理员同意页，
+> 同事进不去。所以改用 client_credentials + headersHelper，完全不走浏览器。
 
-## 第 4 步：验证装好了
+## 第 3 步：验证装好了
 
-在 Claude Code 里问一句：
+**重开一个** Claude Code 会话（MCP 在会话启动时加载），问一句：
 
 > 用 gtm-brain 搜一下 B2B SaaS 的定位框架，给我三个案例
 
-装好的话，它会返回带引用的正文。**再让它描述其中一张图** ——
-能描述出来，说明图片链路也通了（这是这个库跟普通 RAG 最大的区别）。
+装好的话，它会返回带引用的正文。正文里的图片都是可以直接打开的链接。
 
 ---
 
@@ -80,8 +62,7 @@ url = "https://gtm-brain-production.up.railway.app/mcp"
 
 这个库的强项是**一手的 GTM 实操细节**，不是泛泛的框架。几个好用的问法：
 
-- 「Fletch PMM 里有哪些 fintech 的 Before/After？把改动前后的首屏文案对比给我」
-  —— 这些是整页网站截图，Claude 能直接读出上面的文案
+- 「Fletch PMM 里有哪些 fintech 的 Before/After？把改动前后的定位差异总结给我」
 - 「Lenny's 里关于 PLG 到 sales-led 转型的文章，按时间排一下，看观点怎么变的」
 - 「找 2026 年提到 AI 搜索 / GEO 的所有内容」—— 每页都打了 `year:` tag
 
@@ -94,9 +75,9 @@ url = "https://gtm-brain-production.up.railway.app/mcp"
 
 | 现象 | 原因 |
 |---|---|
-| 401 / `invalid_client` | 凭证不对，或者被撤销了。找阿蓓重发 |
+| 安装脚本报「凭证换不到 token」 | 凭证被撤销或网络不通。找阿蓓重新生成 |
+| `claude mcp list` 里 gtm-brain 连不上 | 在终端跑 `python3 ~/.config/gtm-brain/headers.py`，报错信息发给阿蓓 |
 | `insufficient_scope` | 你在调一个需要 `admin` 或 `write` 的工具。同事只有 `read`，正常 |
-| 搜索很慢（10s 左右） | 正常。每次查询要打一次 embedding API，server 在新加坡、embedding 在美国 |
 | 图片打不开 | 图片是公开 URL，不需要凭证。打不开说明是网络问题，不是权限问题 |
 
 ---
