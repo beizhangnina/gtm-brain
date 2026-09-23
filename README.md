@@ -162,6 +162,7 @@
 | Claude / Codex 回答时没有去查库 | 1）问题里加一句「用 gtm-brain」，确保优先查库；2）确认重启过（新会话 / 重开 App）；3）Claude Code 里输入 `/mcp` 看是否 connected |
 | 其他报错 | 在终端运行 `python3 ~/.config/gtm-brain/headers.py`，把输出发给 Bei（不会显示你的密码） |
 | 换了新电脑 | 在新电脑上再运行一次同一个安装文件就行 |
+| Codex 里偶尔报连接错误 | 更新一下本地脚本（不动你的凭证）：<br>`curl -fsSL https://raw.githubusercontent.com/beizhangnina/gtm-brain/main/client/stdio_bridge.py -o ~/.config/gtm-brain/stdio_bridge.py`<br>然后重启 ChatGPT App |
 | 不想用了 / 离职 | 告诉 Bei，他会注销你的凭证，立刻生效 |
 
 ---

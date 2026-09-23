@@ -8,10 +8,14 @@
 
 协议：stdin 每行一条 JSON-RPC → POST 到 /mcp → 响应（JSON 或 SSE）逐条写回 stdout。
 服务端重启会让 MCP 会话失效（404），这里会自动重放 initialize 再重试，客户端无感。
+长连接偶尔会被中途掐断（实测 IncompleteRead），也会自动重试 —— 凭证是只读的，重试没有副作用。
 只用标准库。
 """
+import http.client
 import json
+import socket
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -21,6 +25,10 @@ import headers  # noqa: E402  同目录的 headers.py
 
 ENV = headers.load_env()
 MCP_URL = ENV["GTM_BRAIN_URL"].rstrip("/") + "/mcp"
+
+# 连接层的瞬时故障：服务端断连、超时。读操作重试安全（只读凭证，不会写两遍）
+TRANSIENT = (http.client.IncompleteRead, http.client.RemoteDisconnected,
+             urllib.error.URLError, socket.timeout, ConnectionError)
 
 session_id: str | None = None
 init_request: dict | None = None  # 记住客户端的 initialize，会话失效时重放
@@ -73,15 +81,22 @@ def handle(msg: dict) -> list[dict]:
     global init_request
     if msg.get("method") == "initialize":
         init_request = msg
-    try:
-        return post(msg)
-    except urllib.error.HTTPError as e:
-        if e.code == 401:                      # token 被提前作废：强制续签重试一次
-            return post(msg, force_refresh=True)
-        if e.code == 404 and session_id and msg.get("method") != "initialize":
-            reinitialize()                     # 服务端重启，会话丢了
+    for attempt in range(3):
+        try:
             return post(msg)
-        raise
+        except urllib.error.HTTPError as e:
+            if e.code == 401:                  # token 被提前作废：强制续签重试一次
+                return post(msg, force_refresh=True)
+            if e.code == 404 and session_id and msg.get("method") != "initialize":
+                reinitialize()                 # 服务端重启，会话丢了
+                return post(msg)
+            raise
+        except TRANSIENT:
+            # HTTPError 是 URLError 的子类，所以这个分支只会接到真正的连接层故障
+            if attempt == 2:
+                raise
+            time.sleep(1 + attempt)
+    raise RuntimeError("unreachable")
 
 
 def main() -> None:
