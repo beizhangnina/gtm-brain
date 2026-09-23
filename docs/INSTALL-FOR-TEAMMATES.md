@@ -1,6 +1,6 @@
 # 接入 SV GTM Advisor
 
-一个装着 1,249 篇 GTM 文章和 7,000+ 张配图的知识库，
+一个装着上千篇 GTM 文章和 7,000+ 张配图的知识库（每周新增），
 通过 MCP 接进你的 **Claude Code 和 / 或 Codex**，用文字就能搜。
 
 内容来源：Lenny's Newsletter、Growth Unhinged、Marketing Ideas、
