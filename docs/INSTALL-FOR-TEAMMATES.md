@@ -1,4 +1,4 @@
-# 接入 GTM Brain
+# 接入 SV GTM Advisor
 
 一个装着 1,249 篇 GTM 文章和 7,000+ 张配图的知识库，
 通过 MCP 接进你的 **Claude Code 和 / 或 Codex**，用文字就能搜。
@@ -16,7 +16,7 @@ Fletch PMM（Before/After 定位对比）、MRR Unlocked，外加一批 GTM play
 | 名字 | 是什么 |
 |---|---|
 | `gtm-brain` | 你要装的 MCP server，地址 `https://gtm-brain-production.up.railway.app/mcp` |
-| `beizhangnina/gtm-brain` | 维护它的代码仓库。**你不需要 clone**，装 MCP 跟仓库无关 |
+| `beizhangnina/sv-gtm-advisor` | 维护它的代码仓库（原名 gtm-brain）。**你不需要 clone**，装 MCP 跟仓库无关 |
 
 ---
 
